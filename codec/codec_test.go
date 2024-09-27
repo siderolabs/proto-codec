@@ -5,78 +5,15 @@
 package codec_test
 
 import (
+	"strings"
 	"testing"
-	"time"
 
-	vtimestamppb "github.com/planetscale/vtprotobuf/types/known/timestamppb"
+	vtwrapperspb "github.com/planetscale/vtprotobuf/types/known/wrapperspb"
 	"google.golang.org/grpc/encoding"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/runtime/protoimpl"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
-
-func TestProtobuf(t *testing.T) {
-	expected := time.Now().UTC()
-
-	testProtobuf(t, timestamppb.New(expected), check(expected))
-	res := testing.Benchmark(BenchmarkProtobuf)
-
-	if allocs := res.AllocsPerOp(); allocs != 4 {
-		t.Fatalf("unexpected number of allocations: %d", allocs)
-	}
-}
-
-func BenchmarkProtobuf(b *testing.B) {
-	expected := time.Now().UTC()
-	ts := timestamppb.New(expected)
-	c := check(expected)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for range b.N {
-		testProtobuf(b, ts, c)
-	}
-}
-
-func check(expected time.Time) func(t testing.TB, what *timestamppb.Timestamp) {
-	return func(t testing.TB, what *timestamppb.Timestamp) {
-		if !expected.Equal(what.AsTime()) {
-			t.Fatal("timestamps are not equal")
-		}
-	}
-}
-
-func TestVTProtobuf(t *testing.T) {
-	expected := time.Now().UTC()
-
-	testProtobuf(t, (*vtimestamppb.Timestamp)(timestamppb.New(expected)), checkVT(expected))
-
-	res := testing.Benchmark(BenchmarkVTProtobuf)
-
-	if allocs := res.AllocsPerOp(); allocs != 4 {
-		t.Fatalf("unexpected number of allocations: %d", allocs)
-	}
-}
-
-func BenchmarkVTProtobuf(b *testing.B) {
-	expected := time.Now().UTC()
-	ts := (*vtimestamppb.Timestamp)(timestamppb.New(expected))
-	c := checkVT(expected)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for range b.N {
-		testProtobuf(b, ts, c)
-	}
-}
-
-func checkVT(expected time.Time) func(t testing.TB, what *vtimestamppb.Timestamp) {
-	return func(t testing.TB, what *vtimestamppb.Timestamp) {
-		if !expected.Equal((*timestamppb.Timestamp)(what).AsTime()) {
-			t.Fatal("timestamps are not equal", expected, (*timestamppb.Timestamp)(what).AsTime())
-		}
-	}
-}
 
 func testProtobuf[T any](t testing.TB, what *T, check func(testing.TB, *T)) {
 	c := encoding.GetCodecV2("proto")
@@ -86,6 +23,8 @@ func testProtobuf[T any](t testing.TB, what *T, check func(testing.TB, *T)) {
 		t.Fatal(err)
 	}
 
+	defer out.Free()
+
 	var result T
 
 	err = c.Unmarshal(out, &result)
@@ -94,4 +33,192 @@ func testProtobuf[T any](t testing.TB, what *T, check func(testing.TB, *T)) {
 	}
 
 	check(t, &result)
+}
+
+type testData struct {
+	length int
+	allocs int64
+}
+
+func TestProtobuf(t *testing.T) {
+	tests := map[string]testData{
+		"short string": {
+			length: 42,
+			allocs: 5,
+		},
+		"long string": {
+			length: 10240,
+			allocs: allocsCount,
+		},
+	}
+
+	for name, d := range tests {
+		if !t.Run(name, func(t *testing.T) {
+			str := generateString(d.length)
+			value := wrapperspb.String(str)
+			c := check(str)
+
+			testProtobuf(t, value, c)
+
+			res := testing.Benchmark(benchmarkProtobuf(func(t testing.TB) { testProtobuf(t, value, c) }))
+
+			if allocs := res.AllocsPerOp(); d.allocs != allocs {
+				t.Fatalf("unexpected number of allocations: expected %d != actual %d", d.allocs, allocs)
+			}
+		}) {
+			break
+		}
+	}
+}
+
+func BenchmarkProtobuf(b *testing.B) {
+	str := generateString(42)
+	value := wrapperspb.String(str)
+	c := check(str)
+
+	benchmarkProtobuf(func(t testing.TB) { testProtobuf(t, value, c) })(b)
+}
+
+func check(expected string) func(t testing.TB, what *wrapperspb.StringValue) {
+	return func(t testing.TB, what *wrapperspb.StringValue) {
+		if expected != what.GetValue() {
+			t.Fatal("strings are not equal", expected, what.GetValue())
+		}
+	}
+}
+
+func TestVTProtobuf(t *testing.T) {
+	tests := map[string]testData{
+		"short string": {
+			length: 42,
+			allocs: 5,
+		},
+		"long string": {
+			length: 10240,
+			allocs: allocsCount,
+		},
+	}
+
+	for name, d := range tests {
+		if !t.Run(name, func(t *testing.T) {
+			str := generateString(d.length)
+			value := (*vtwrapperspb.StringValue)(wrapperspb.String(str))
+			c := checkVT(str)
+
+			testProtobuf(t, value, c)
+
+			res := testing.Benchmark(benchmarkProtobuf(func(t testing.TB) { testProtobuf(t, value, c) }))
+
+			if allocs := res.AllocsPerOp(); d.allocs != allocs {
+				t.Fatalf("unexpected number of allocations: expected %d != actual %d", d.allocs, allocs)
+			}
+		}) {
+			break
+		}
+	}
+}
+
+func BenchmarkVTProtobuf(b *testing.B) {
+	str := generateString(10240)
+	value := (*vtwrapperspb.StringValue)(wrapperspb.String(str))
+	c := checkVT(str)
+
+	benchmarkProtobuf(func(t testing.TB) { testProtobuf(t, value, c) })(b)
+}
+
+func checkVT(expected string) func(t testing.TB, what *vtwrapperspb.StringValue) {
+	return func(t testing.TB, what *vtwrapperspb.StringValue) {
+		if expected != what.Value {
+			t.Fatal("strings are not equal", expected, what.Value)
+		}
+	}
+}
+
+func TestOldProtobuf(t *testing.T) {
+	tests := map[string]testData{
+		"short string": {
+			length: 42,
+			allocs: 8,
+		},
+		"long string": {
+			length: 10240,
+			allocs: 10,
+		},
+	}
+
+	for name, d := range tests {
+		if !t.Run(name, func(t *testing.T) {
+			str := generateString(d.length)
+			value := wrapperspb.String(str)
+			c := check(str)
+
+			testProtobufOld(t, value, c)
+
+			res := testing.Benchmark(benchmarkProtobuf(func(t testing.TB) { testProtobufOld(t, value, c) }))
+
+			if allocs := res.AllocsPerOp(); d.allocs != allocs {
+				t.Fatalf("unexpected number of allocations: expected %d != actual %d", d.allocs, allocs)
+			}
+		}) {
+			break
+		}
+	}
+}
+
+func BenchmarkOldProtobuf(b *testing.B) {
+	str := generateString(42)
+	value := wrapperspb.String(str)
+	c := check(str)
+
+	benchmarkProtobuf(func(t testing.TB) { testProtobufOld(t, value, c) })(b)
+}
+
+func testProtobufOld(t testing.TB, what *wrapperspb.StringValue, check func(testing.TB, *wrapperspb.StringValue)) {
+	c := encoding.GetCodecV2("proto")
+
+	out, err := c.Marshal((*oldProto)(what))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rssult := &wrapperspb.StringValue{}
+
+	err = c.Unmarshal(out, (*oldProto)(rssult))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	check(t, rssult)
+}
+
+// Because all protobuf types provide V2 version of methods, we need to manually cast it down to V1.
+type oldProto wrapperspb.StringValue
+
+func (x *oldProto) Reset() { (*wrapperspb.StringValue)(x).Reset() }
+
+func (x *oldProto) String() string { return messageString((*wrapperspb.StringValue)(x)) }
+func (*oldProto) ProtoMessage()    {}
+func messageString(m protoreflect.ProtoMessage) string {
+	return protoimpl.X.MessageStringOf(m)
+}
+
+func generateString(length int) string {
+	var builder strings.Builder
+
+	for i := range length {
+		builder.WriteRune(rune('a' + i%26))
+	}
+
+	return builder.String()
+}
+
+func benchmarkProtobuf(fn func(t testing.TB)) func(b *testing.B) {
+	return func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for range b.N {
+			fn(b)
+		}
+	}
 }

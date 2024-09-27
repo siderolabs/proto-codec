@@ -35,7 +35,7 @@ func (vtprotoCodec) Marshal(v any) (mem.BufferSlice, error) {
 	pool := mem.DefaultBufferPool()
 
 	buf := pool.Get(size)
-	if err := marshalAppend((*buf)[:size], v); err != nil {
+	if err := marshalAppend(*buf, v); err != nil {
 		pool.Put(buf)
 
 		return nil, err
@@ -77,7 +77,7 @@ func marshalAppend(dst []byte, v any) error {
 	case vtprotoMessage:
 		return takeErr(v.MarshalToSizedBufferVT(dst))
 	case gproto.Message:
-		return takeErr((gproto.MarshalOptions{}).MarshalAppend(dst, v))
+		return takeErr((gproto.MarshalOptions{}).MarshalAppend(dst[:0], v))
 	case protoadapt.MessageV1:
 		return takeErr((gproto.MarshalOptions{}).MarshalAppend(dst[:0], protoadapt.MessageV2Of(v)))
 	default:
