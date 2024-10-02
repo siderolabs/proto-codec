@@ -48,6 +48,8 @@ func getSize(v any) (int, error) {
 	switch v := v.(type) {
 	case vtprotoMessage:
 		return v.SizeVT(), nil
+	case gogoProtoMessage:
+		return v.Size(), nil
 	case gproto.Message:
 		return gproto.Size(v), nil
 	case protoadapt.MessageV1:
@@ -61,6 +63,8 @@ func marshal(v any) ([]byte, error) {
 	switch v := v.(type) {
 	case vtprotoMessage:
 		return v.MarshalVT()
+	case gogoProtoMessage:
+		return v.Marshal()
 	case gproto.Message:
 		return gproto.Marshal(v)
 	case protoadapt.MessageV1:
@@ -76,6 +80,8 @@ func marshalAppend(dst []byte, v any) error {
 	switch v := v.(type) {
 	case vtprotoMessage:
 		return takeErr(v.MarshalToSizedBufferVT(dst))
+	case gogoProtoMessage:
+		return takeErr(v.MarshalToSizedBuffer(dst))
 	case gproto.Message:
 		return takeErr((gproto.MarshalOptions{}).MarshalAppend(dst[:0], v))
 	case protoadapt.MessageV1:
@@ -92,6 +98,8 @@ func (vtprotoCodec) Unmarshal(data mem.BufferSlice, v any) error {
 	switch v := v.(type) {
 	case vtprotoMessage:
 		return v.UnmarshalVT(buf.ReadOnlyData())
+	case gogoProtoMessage:
+		return v.Unmarshal(buf.ReadOnlyData())
 	case gproto.Message:
 		return gproto.Unmarshal(buf.ReadOnlyData(), v)
 	case protoadapt.MessageV1:
@@ -108,6 +116,14 @@ type vtprotoMessage interface {
 	MarshalVT() ([]byte, error)
 	UnmarshalVT([]byte) error
 	SizeVT() int
+}
+
+type gogoProtoMessage interface {
+	protoadapt.MessageV1
+	MarshalToSizedBuffer([]byte) (int, error)
+	Marshal() ([]byte, error)
+	Unmarshal([]byte) error
+	Size() int
 }
 
 func init() { encoding.RegisterCodecV2(vtprotoCodec{}) }

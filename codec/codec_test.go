@@ -222,3 +222,70 @@ func benchmarkProtobuf(fn func(t testing.TB)) func(b *testing.B) {
 		}
 	}
 }
+
+func TestGoGoProtobuf(t *testing.T) {
+	tests := map[string]testData{
+		"short string": {
+			length: 42,
+			allocs: 5,
+		},
+		"long string": {
+			length: 10240,
+			allocs: allocsCount,
+		},
+	}
+
+	for name, d := range tests {
+		if !t.Run(name, func(t *testing.T) {
+			str := generateString(d.length)
+			value := (*gogoProto)(wrapperspb.String(str))
+			c := checkGogo(str)
+
+			testProtobuf(t, value, c)
+
+			res := testing.Benchmark(benchmarkProtobuf(func(t testing.TB) { testProtobuf(t, value, c) }))
+
+			if allocs := res.AllocsPerOp(); d.allocs != allocs {
+				t.Fatalf("unexpected number of allocations: expected %d != actual %d", d.allocs, allocs)
+			}
+		}) {
+			break
+		}
+	}
+}
+
+func BenchmarkGoGoProtobuf(b *testing.B) {
+	str := generateString(10240)
+	value := (*gogoProto)(wrapperspb.String(str))
+	c := checkGogo(str)
+
+	benchmarkProtobuf(func(t testing.TB) { testProtobuf(t, value, c) })(b)
+}
+
+func checkGogo(expected string) func(t testing.TB, what *gogoProto) {
+	return func(t testing.TB, what *gogoProto) {
+		if expected != what.Value {
+			t.Fatal("strings are not equal", expected, what.Value)
+		}
+	}
+}
+
+// Let's pretend our vt proto is actually gogo proto.
+type gogoProto vtwrapperspb.StringValue
+
+func (x *gogoProto) MarshalToSizedBuffer(b []byte) (int, error) {
+	return (*vtwrapperspb.StringValue)(x).MarshalToSizedBufferVT(b)
+}
+
+func (x *gogoProto) Marshal() ([]byte, error) {
+	return (*vtwrapperspb.StringValue)(x).MarshalVT()
+}
+
+func (x *gogoProto) Unmarshal(dest []byte) error {
+	return (*vtwrapperspb.StringValue)(x).UnmarshalVT(dest)
+}
+
+func (x *gogoProto) Size() int      { return (*vtwrapperspb.StringValue)(x).SizeVT() }
+func (x *gogoProto) Reset()         { (*wrapperspb.StringValue)(x).Reset() }
+func (x *gogoProto) String() string { return messageString((*wrapperspb.StringValue)(x)) }
+func (*gogoProto) ProtoMessage()    {}
