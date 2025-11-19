@@ -3,9 +3,9 @@ module github.com/siderolabs/proto-codec
 go 1.23.0
 
 require (
-	github.com/planetscale/vtprotobuf v0.6.1-0.20240917153116-6f2963f01587
-	google.golang.org/grpc v1.69.4
-	google.golang.org/protobuf v1.36.3
+	github.com/planetscale/vtprotobuf ba97887b0a25
+	google.golang.org/grpc v1.77.0
+	google.golang.org/protobuf v1.36.10
 )
 
 require golang.org/x/sys v0.29.0 // indirect
