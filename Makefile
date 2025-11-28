@@ -1,6 +1,6 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
 #
-# Generated on 2025-01-22T19:00:42Z by kres 3075de9.
+# Generated on 2025-11-28T13:54:12Z by kres e1d6dac.
 
 # common variables
 
@@ -17,19 +17,21 @@ WITH_RACE ?= false
 REGISTRY ?= ghcr.io
 USERNAME ?= siderolabs
 REGISTRY_AND_USERNAME ?= $(REGISTRY)/$(USERNAME)
-PROTOBUF_GO_VERSION ?= 1.36.2
+PROTOBUF_GO_VERSION ?= 1.36.10
 GRPC_GO_VERSION ?= 1.5.1
-GRPC_GATEWAY_VERSION ?= 2.25.1
+GRPC_GATEWAY_VERSION ?= 2.27.3
 VTPROTOBUF_VERSION ?= 0.6.0
-GOIMPORTS_VERSION ?= 0.29.0
-DEEPCOPY_VERSION ?= v0.5.6
-GOLANGCILINT_VERSION ?= v1.63.4
-GOFUMPT_VERSION ?= v0.7.0
-GO_VERSION ?= 1.23.4
+GOIMPORTS_VERSION ?= 0.38.0
+GOMOCK_VERSION ?= 0.6.0
+DEEPCOPY_VERSION ?= v0.5.8
+GOLANGCILINT_VERSION ?= v2.6.1
+GOFUMPT_VERSION ?= v0.9.2
+GO_VERSION ?= 1.25.4
 GO_BUILDFLAGS ?=
 GO_LDFLAGS ?=
 CGO_ENABLED ?= 0
 GOTOOLCHAIN ?= local
+GOEXPERIMENT ?=
 TESTPKGS ?= ./...
 KRES_IMAGE ?= ghcr.io/siderolabs/kres:latest
 CONFORMANCE_IMAGE ?= ghcr.io/siderolabs/conform:latest
@@ -65,11 +67,12 @@ COMMON_ARGS += --build-arg=GRPC_GO_VERSION="$(GRPC_GO_VERSION)"
 COMMON_ARGS += --build-arg=GRPC_GATEWAY_VERSION="$(GRPC_GATEWAY_VERSION)"
 COMMON_ARGS += --build-arg=VTPROTOBUF_VERSION="$(VTPROTOBUF_VERSION)"
 COMMON_ARGS += --build-arg=GOIMPORTS_VERSION="$(GOIMPORTS_VERSION)"
+COMMON_ARGS += --build-arg=GOMOCK_VERSION="$(GOMOCK_VERSION)"
 COMMON_ARGS += --build-arg=DEEPCOPY_VERSION="$(DEEPCOPY_VERSION)"
 COMMON_ARGS += --build-arg=GOLANGCILINT_VERSION="$(GOLANGCILINT_VERSION)"
 COMMON_ARGS += --build-arg=GOFUMPT_VERSION="$(GOFUMPT_VERSION)"
 COMMON_ARGS += --build-arg=TESTPKGS="$(TESTPKGS)"
-TOOLCHAIN ?= docker.io/golang:1.23-alpine
+TOOLCHAIN ?= docker.io/golang:1.25-alpine
 
 # help menu
 
@@ -163,6 +166,9 @@ local-%:  ## Builds the specified target defined in the Dockerfile using the loc
 lint-golangci-lint:  ## Runs golangci-lint linter.
 	@$(MAKE) target-$@
 
+lint-golangci-lint-fmt:  ## Runs golangci-lint formatter and tries to fix issues automatically.
+	@$(MAKE) local-$@ DEST=.
+
 lint-gofumpt:  ## Runs gofumpt linter.
 	@$(MAKE) target-$@
 
@@ -191,6 +197,9 @@ unit-tests-race:  ## Performs unit tests with race detection enabled.
 
 .PHONY: lint
 lint: lint-golangci-lint lint-gofumpt lint-govulncheck  ## Run all linters for the project.
+
+.PHONY: lint-fmt
+lint-fmt: lint-golangci-lint-fmt  ## Run all linter formatters and fix up the source tree.
 
 .PHONY: rekres
 rekres:
