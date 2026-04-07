@@ -6,4 +6,4 @@
 
 package codec_test
 
-const allocsCount = 4
+const allocsCount = 3

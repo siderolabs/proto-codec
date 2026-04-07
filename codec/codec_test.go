@@ -142,7 +142,7 @@ func TestOldProtobuf(t *testing.T) {
 		},
 		"long string": {
 			length: 10240,
-			allocs: 10,
+			allocs: 9,
 		},
 	}
 
